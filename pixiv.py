@@ -1,5 +1,4 @@
 import requests, os, re, pickle, time, random
-#import pixiv_crawler as pc
 from lxml import html
 from lxml import etree
 import simplejson as json
