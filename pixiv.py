@@ -1,18 +1,21 @@
-import requests, os, re
+import requests, os, re, pickle, time, random
 #import pixiv_crawler as pc
 from lxml import html
 from lxml import etree
 import simplejson as json
 from math import ceil
-name="your_account"
+name="account"
 passwd="passwd"
 fileroot="/home/root"
 login_url='https://accounts.pixiv.net/login'
+proxies={'http':'socks5h://127.0.0.1:1080',
+'https':'socks5h://127.0.0.1:1080'}
 pixiv_root="https://www.pixiv.net/"
 url_artist_template=pixiv_root+"member_illust.php?id=%s&type=all&p=%d"
 url_homepage=pixiv_root+"member.php?id=%d"
 url_follower_template="https://www.pixiv.net/ajax/user/%d/following?offset=%d&limit=100&rest=show"
 s=requests.session()
+s.proxies=proxies
 medium_page_temp="https://www.pixiv.net/member_illust.php?mode=medium&illust_id="
 header={"authority": "www.pixiv.net",
 "method": "GET",
@@ -46,35 +49,45 @@ def login(name,passwd):
     #else:
         #print("log in")
 
-def get_address(artist_id,ifreturn):
-    following_list=[]
-    artist_following_num_url=url_homepage % artist_id
-    fl_number=following_number(artist_following_num_url)
-    artist_url="https://www.pixiv.net/ajax/user/%d/profile/all" % int(artist_id)
-    r=s.get(artist_url,headers=header)
-    r.raise_for_status()
-    dict=json.loads(r.text)
-    pixel_id=list(dict['body']['illusts'].keys())
-    pixel_address_medium=[medium_page_temp+i for i in pixel_id]
-    total_num=len(pixel_address_medium)
-    print("the number of %d's pictures is %d in total" %(artist_id,total_num))
-    print("Downloading =====================>")
-    for i in range(total_num):
-        url=pixel_address_medium[i]
-        id=pixel_id[i]
-        r=s.get(url)
+def get_address(artist_id,ifreturn,count):
+    if count>5:
+        return
+    count+=1
+    try:
+        following_list=[]
+        artist_following_num_url=url_homepage % artist_id
+        fl_number=following_number(artist_following_num_url)
+        artist_url="https://www.pixiv.net/ajax/user/%d/profile/all" % int(artist_id)
+        r=s.get(artist_url,headers=header)
         r.raise_for_status()
-        r.encoding=r.apparent_encoding
-        image_address=re.findall(r'regular+.{1,}p0_master1200.jpg',r.text)[0][10:].replace("\\","")
-        save(image_address,artist_id,id)
-        if ((i+1)%50==0):
-            print("Processed %d of %d" %(i+1,total_num))
-    for j in range(ceil(fl_number/100)):
-        offset=100*j
-        following_list+=get_following_list(artist_id,offset)
-    following_list=[int(i[10:-1]) for i in following_list]
-    if ifreturn:
-        return following_list
+        dict=json.loads(r.text)
+        pixel_id=list(dict['body']['illusts'].keys())
+        pixel_address_medium=[medium_page_temp+i for i in pixel_id]
+        total_num=len(pixel_address_medium)
+        print("the number of %d's pictures is %d in total" %(artist_id,total_num))
+        print("Downloading =====================>")
+        for i in range(total_num):
+            try:
+                url=pixel_address_medium[i]
+                id=pixel_id[i]
+                r=s.get(url)
+                r.raise_for_status()
+                r.encoding=r.apparent_encoding
+                image_address=re.findall(r'regular+.{1,}p0_master1200.jpg',r.text)[0][10:].replace("\\","")
+                save(image_address,artist_id,id)
+            except:
+                    continue
+            if ((i+1)%50==0):
+                print("Processed %d of %d" %(i+1,total_num))
+        if ifreturn:
+            for j in range(ceil(fl_number/100)):
+                offset=100*j
+                following_list+=get_following_list(artist_id,offset)
+            following_list=[int(i[10:-1]) for i in following_list]
+            return following_list
+    except:
+        print("trying agian with %d" %artist_id)
+        get_address(artist_id,ifreturn,count)
 
 
 def following_number(artist_following_num_url):
@@ -105,6 +118,12 @@ def get_following_list(artist_id,offset):
 
 def main():
     login(name,passwd)
-    following_list=get_address(6662895,True)
+    following_list=get_address(6662895,True,0)
     for i in following_list:
-        get_address(i,False)
+        random.seed(i)
+        t=random.random()
+        time.sleep(t)
+        get_address(i,False,0)
+
+
+main()
